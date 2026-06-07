@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ooredoo B2B Sales Portal</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    html, body, #root { margin: 0; padding: 0; height: 100%; }
+    body { background: #080809; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo } = React;
+
+
+// ─── CONFIG ──────────────────────────────────────────────────────────────────
+const USERS = [
+  { id: "leader1", name: "Team Leader", pin: "0000", role: "leader", target: 0 },
+  { id: "am1", name: "Mohamed",  pin: "1234", role: "am", target: 500 },
+  { id: "am2", name: "Ahmed",    pin: "1234", role: "am", target: 500 },
+  { id: "am3", name: "Sara",     pin: "1234", role: "am", target: 500 },
+  { id: "am4", name: "Khalid",   pin: "1234", role: "am", target: 500 },
+  { id: "am5", name: "Fatma",    pin: "1234", role: "am", target: 500 },
+  { id: "am6", name: "Yousef",   pin: "1234", role: "am", target: 500 },
+  { id: "am7", name: "Hana",     pin: "1234", role: "am", target: 500 },
+  { id: "am8", name: "Omar",     pin: "1234", role: "am", target: 500 },
+  { id: "am9", name: "Maryam",   pin: "1234", role: "am", target: 500 },
+];
+
+const PIPELINE = ["Lead", "Active", "Closed Won", "Closed Lost"];
+const ACTIVITY_TYPES = ["Cold Visit", "Follow-up Visit", "Call", "Meeting"];
+const SECTORS = ["Trading","Construction","Hospitality","Healthcare","Education","Transport & Logistics","Oil & Gas","Retail","Finance","Manufacturing","Real Estate","Government","Other"];
+const PRODUCTS = ["OIP Fixed Internet","Maktabi Bundle","Maktabi+","O Business+ Mobile","C2B Fiber","5G Fixed Wireless","Microsoft 365","Cloud / ICT","Cybersecurity","CCTV","TallyPrime"];
+
+const STAGE_META = {
+  "Lead":        { color: "#818cf8", bg: "rgba(99,102,241,0.12)",  border: "rgba(99,102,241,0.3)"  },
+  "Active":      { color: "#fbbf24", bg: "rgba(245,158,11,0.12)",  border: "rgba(245,158,11,0.3)"  },
+  "Closed Won":  { color: "#4ade80", bg: "rgba(34,197,94,0.12)",   border: "rgba(34,197,94,0.3)"   },
+  "Closed Lost": { color: "#f87171", bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.3)"   },
+};
+
+const ACTIVITY_META = {
+  "Cold Visit":      { icon: "🚶", color: "#a78bfa" },
+  "Follow-up Visit": { icon: "🔁", color: "#60a5fa" },
+  "Call":            { icon: "📞", color: "#34d399" },
+  "Meeting":         { icon: "🤝", color: "#fbbf24" },
+};
+
+const G = {
+  red:"#E2001A", dark:"#080809", surface:"#0f0f11", card:"#161618",
+  card2:"#1c1c1f", border:"#222225", border2:"#2a2a2e", muted:"#3a3a3e",
+  text:"#f0f0f0", sub:"#666", sub2:"#888", green:"#22c55e", amber:"#f59e0b",
+};
+
+const KEYS = { DEALS:"oo-deals-v1", ACTIVITIES:"oo-activities-v1", TASKS:"oo-tasks-v1" };
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+const uid  = () => Math.random().toString(36).slice(2);
+const now  = () => new Date().toISOString();
+const fmtD = (iso) => iso ? new Date(iso).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}) : "—";
+const fmtT = (iso) => iso ? new Date(iso).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}) : "";
+const today= () => new Date().toISOString().slice(0,10);
+const isOverdue = (dateStr) => dateStr && dateStr < today();
+const isDueToday = (dateStr) => dateStr === today();
+const userName = (id) => USERS.find(u=>u.id===id)?.name || id;
+
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
+async function sGet(key) {
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : []; }
+  catch { return []; }
+}
+async function sSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+async function sSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+// ─── CSS INJECTION ────────────────────────────────────────────────────────────
+const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap');
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  body{background:#080809;font-family:'JetBrains Mono',monospace;color:#f0f0f0;-webkit-font-smoothing:antialiased;}
+  input,select,textarea,button{font-family:'JetBrains Mono',monospace;}
+  ::-webkit-scrollbar{width:3px;height:3px;}
+  ::-webkit-scrollbar-thumb{background:#2a2a2e;border-radius:2px;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+  @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-8px);}to{opacity:1;transform:translateX(0);}}
+  .fu{animation:fadeUp 0.25s ease both;}
+  .tag{display:inline-flex;align-items:center;font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid;white-space:nowrap;}
+  .nav-btn{background:transparent;border:none;cursor:pointer;padding:8px 12px;border-radius:8px;font-size:11px;font-family:'JetBrains Mono',monospace;transition:all 0.15s;display:flex;align-items:center;gap:6px;white-space:nowrap;}
+  .nav-btn:hover{background:#1c1c1f;}
+  .nav-btn.active{background:#1c1c1f;color:#f0f0f0;}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:#E2001A !important;}
+  .pill{display:inline-flex;align-items:center;font-size:10px;padding:4px 10px;border-radius:20px;border:1px solid;cursor:pointer;transition:all 0.15s;}
+  .pill:hover{opacity:0.85;}
+  .progress-bar{height:4px;background:#1c1c1f;border-radius:2px;overflow:hidden;}
+  .progress-fill{height:100%;border-radius:2px;transition:width 0.4s ease;}
+`;
+
+function useCSS() {
+  useEffect(()=>{
+    const s=document.createElement("style");
+    s.textContent=CSS;
+    document.head.appendChild(s);
+    return()=>document.head.removeChild(s);
+  },[]);
+}
+
+// ─── UI ATOMS ─────────────────────────────────────────────────────────────────
+const Inp = ({label,...p})=>(
+  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+    {label&&<div style={{fontSize:10,color:G.sub,textTransform:"uppercase",letterSpacing:0.8}}>{label}</div>}
+    <input {...p} style={{background:G.card2,border:`1px solid ${G.border2}`,borderRadius:8,color:G.text,fontSize:12,padding:"9px 11px",width:"100%",...(p.style||{})}}/>
+  </div>
+);
+const Sel = ({label,children,...p})=>(
+  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+    {label&&<div style={{fontSize:10,color:G.sub,textTransform:"uppercase",letterSpacing:0.8}}>{label}</div>}
+    <select {...p} style={{background:G.card2,border:`1px solid ${G.border2}`,borderRadius:8,color:G.text,fontSize:12,padding:"9px 11px",width:"100%"}}>{children}</select>
+  </div>
+);
+const Txt = ({label,...p})=>(
+  <div style={{display:"flex",flexDirection:"column",gap:4}}>
+    {label&&<div style={{fontSize:10,color:G.sub,textTransform:"uppercase",letterSpacing:0.8}}>{label}</div>}
+    <textarea {...p} style={{background:G.card2,border:`1px solid ${G.border2}`,borderRadius:8,color:G.text,fontSize:12,padding:"9px 11px",width:"100%",resize:"vertical",minHeight:64,fontFamily:"JetBrains Mono,monospace",...(p.style||{})}}/>
+  </div>
+);
+const Grid = ({cols=2,children,gap=10})=>(
+  <div style={{display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap,marginBottom:gap}}>{children}</div>
+);
+const Card = ({children,style={}})=>(
+  <div style={{background:G.card,border:`1px solid ${G.border}`,borderRadius:12,padding:16,...style}}>{children}</div>
+);
+const Btn = ({children,variant="primary",sm,onClick,disabled,style={}})=>{
+  const base={border:"none",borderRadius:8,cursor:disabled?"not-allowed":"pointer",fontFamily:"Syne,sans-serif",fontWeight:700,letterSpacing:0.3,transition:"opacity 0.15s",opacity:disabled?0.4:1,...style};
+  const variants={
+    primary:{background:G.red,color:"#fff",padding:sm?"6px 14px":"11px 20px",fontSize:sm?11:12},
+    ghost:{background:"transparent",border:`1px solid ${G.border2}`,color:G.sub2,padding:sm?"5px 12px":"10px 18px",fontSize:sm?11:12},
+    danger:{background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.3)",color:"#f87171",padding:sm?"5px 12px":"10px 18px",fontSize:sm?11:12},
+  };
+  return <button onClick={onClick} disabled={disabled} style={{...base,...variants[variant]}}>{children}</button>;
+};
+const StageBadge = ({stage})=>{
+  const m=STAGE_META[stage]||STAGE_META["Lead"];
+  return <span className="tag" style={{color:m.color,background:m.bg,borderColor:m.border}}>{stage}</span>;
+};
+const Divider = ()=><div style={{height:1,background:G.border,margin:"16px 0"}}/>;
+const Stat = ({label,value,color=G.text,sub})=>(
+  <div style={{background:G.card,border:`1px solid ${G.border}`,borderRadius:10,padding:"14px 12px",textAlign:"center"}}>
+    <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:24,color,lineHeight:1}}>{value}</div>
+    {sub&&<div style={{fontSize:9,color:G.amber,marginTop:2}}>{sub}</div>}
+    <div style={{fontSize:9,color:G.sub,textTransform:"uppercase",letterSpacing:0.8,marginTop:4}}>{label}</div>
+  </div>
+);
+
+// ─── MODAL ────────────────────────────────────────────────────────────────────
+function Modal({title,onClose,children,width=520}){
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={onClose}>
+      <div style={{background:G.surface,border:`1px solid ${G.border}`,borderRadius:16,padding:24,width:"100%",maxWidth:width,maxHeight:"90vh",overflowY:"auto",animation:"fadeUp 0.2s ease"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:15,color:"#fff"}}>{title}</div>
+          <button onClick={onClose} style={{background:"transparent",border:"none",color:G.sub,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// ─── LOGIN ────────────────────────────────────────────────────────────────────
+function Login({onLogin}){
+  useCSS();
+  const [pin,setPin]=useState("");
+  const [err,setErr]=useState("");
+  const attempt=()=>{
+    const u=USERS.find(x=>x.pin===pin);
+    if(!u){setErr("Incorrect PIN");setPin("");return;}
+    onLogin(u);
+  };
+  return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:G.dark,padding:24}}>
+      <div className="fu" style={{width:"100%",maxWidth:320}}>
+        <div style={{textAlign:"center",marginBottom:40}}>
+          <div style={{width:52,height:52,borderRadius:"50%",background:G.red,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:14,color:"#fff"}}>OO</div>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:20,color:"#fff",letterSpacing:-0.5}}>B2B Sales Portal</div>
+          <div style={{fontSize:11,color:G.sub,marginTop:4}}>Ooredoo Oman · Field Sales</div>
+        </div>
+        <Card style={{padding:28}}>
+          <div style={{fontSize:10,color:G.sub,textTransform:"uppercase",letterSpacing:1.5,textAlign:"center",marginBottom:20}}>Enter Your PIN</div>
+          <input type="password" inputMode="numeric" maxLength={4} value={pin} autoFocus
+            placeholder="••••"
+            onChange={e=>{setPin(e.target.value.replace(/\D/g,""));setErr("");}}
+            onKeyDown={e=>e.key==="Enter"&&attempt()}
+            style={{width:"100%",background:G.surface,border:`1.5px solid ${err?"#f87171":G.border2}`,borderRadius:10,color:G.text,fontSize:28,textAlign:"center",letterSpacing:12,padding:"14px 0",outline:"none",marginBottom:err?8:16,transition:"border-color 0.2s"}}
+          />
+          {err&&<div style={{fontSize:11,color:"#f87171",textAlign:"center",marginBottom:12}}>{err}</div>}
+          <Btn onClick={attempt} style={{width:"100%"}}>SIGN IN</Btn>
+        </Card>
+        <div style={{fontSize:10,color:G.muted,textAlign:"center",marginTop:14}}>Contact your team leader for your PIN</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DEAL FORM ────────────────────────────────────────────────────────────────
+function DealForm({initial={},onSave,onClose,userId,userName:uName}){
+  const [d,setD]=useState({
+    company:"",contact:"",crn:"",sector:"",location:"",phone:"",
+    products:[],stage:"Lead",value:"",followUpDate:"",notes:"",...initial
+  });
+  const set=(k,v)=>setD(x=>({...x,[k]:v}));
+  const toggleP=(p)=>set("products",d.products.includes(p)?d.products.filter(x=>x!==p):[...d.products,p]);
+  const save=()=>{
+    if(!d.company.trim())return;
+    onSave({...d,value:parseFloat(d.value)||0,userId,userName:uName,updatedAt:now(),
+      createdAt:initial.createdAt||now(),id:initial.id||uid()});
+    onClose();
+  };
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Grid cols={3}><Inp label="Company *" value={d.company} onChange={e=>set("company",e.target.value)} placeholder="Al Madina Trading"/><Inp label="Contact" value={d.contact} onChange={e=>set("contact",e.target.value)} placeholder="Ahmed Al Balushi"/><Inp label="CRN" value={d.crn} onChange={e=>set("crn",e.target.value)} placeholder="1234567"/></Grid>
+      <Grid cols={3}><Sel label="Sector" value={d.sector} onChange={e=>set("sector",e.target.value)}><option value="">— Select —</option>{SECTORS.map(s=><option key={s}>{s}</option>)}</Sel><Inp label="Location" value={d.location} onChange={e=>set("location",e.target.value)} placeholder="Ruwi, Muscat"/><Inp label="Phone" value={d.phone} onChange={e=>set("phone",e.target.value)} placeholder="+968 9X XXX XXX"/></Grid>
+      <div>
+        <div style={{fontSize:10,color:G.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:6}}>Products</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {PRODUCTS.map(p=><button key={p} onClick={()=>toggleP(p)} style={{fontSize:10,padding:"4px 10px",borderRadius:6,border:"1px solid",cursor:"pointer",background:d.products.includes(p)?"rgba(226,0,26,0.12)":"transparent",borderColor:d.products.includes(p)?G.red:G.border2,color:d.products.includes(p)?"#ff6070":G.sub2}}>{p}</button>)}
+        </div>
+      </div>
+      <Grid cols={3}><Sel label="Stage" value={d.stage} onChange={e=>set("stage",e.target.value)}>{PIPELINE.map(s=><option key={s}>{s}</option>)}</Sel><Inp label="Deal Value (OMR)" type="number" value={d.value} onChange={e=>set("value",e.target.value)} placeholder="0.000"/><Inp label="Follow-up Date" type="date" value={d.followUpDate} onChange={e=>set("followUpDate",e.target.value)}/></Grid>
+      <Txt label="Notes" value={d.notes} onChange={e=>set("notes",e.target.value)} placeholder="Key details, objections, next steps..."/>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={save} disabled={!d.company.trim()}>Save Deal</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ─── ACTIVITY FORM ────────────────────────────────────────────────────────────
+function ActivityForm({deals,onSave,onClose,userId,userName:uName,prefillDealId=""}){
+  const [a,setA]=useState({type:"Cold Visit",dealId:prefillDealId,notes:"",outcome:"",nextStep:"",date:today()});
+  const set=(k,v)=>setA(x=>({...x,[k]:v}));
+  const save=()=>{
+    onSave({...a,userId,userName:uName,ts:now(),id:uid()});
+    onClose();
+  };
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Grid cols={2}>
+        <Sel label="Activity Type" value={a.type} onChange={e=>set("type",e.target.value)}>{ACTIVITY_TYPES.map(t=><option key={t}>{t}</option>)}</Sel>
+        <Sel label="Linked Deal" value={a.dealId} onChange={e=>set("dealId",e.target.value)}><option value="">— No Deal —</option>{deals.map(d=><option key={d.id} value={d.id}>{d.company}</option>)}</Sel>
+      </Grid>
+      <Grid cols={2}>
+        <Inp label="Date" type="date" value={a.date} onChange={e=>set("date",e.target.value)}/>
+        <Inp label="Outcome Summary" value={a.outcome} onChange={e=>set("outcome",e.target.value)} placeholder="e.g. Interested, needs proposal"/>
+      </Grid>
+      <Txt label="Notes" value={a.notes} onChange={e=>set("notes",e.target.value)} placeholder="What happened?"/>
+      <Inp label="Next Step" value={a.nextStep} onChange={e=>set("nextStep",e.target.value)} placeholder="e.g. Send proposal by Thursday"/>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={save}>Log Activity</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ─── TASK FORM ────────────────────────────────────────────────────────────────
+function TaskForm({deals,onSave,onClose,userId,userName:uName}){
+  const [t,setT]=useState({title:"",dealId:"",dueDate:"",priority:"Medium",notes:""});
+  const set=(k,v)=>setT(x=>({...x,[k]:v}));
+  const save=()=>{
+    if(!t.title.trim())return;
+    onSave({...t,userId,userName:uName,done:false,createdAt:now(),id:uid()});
+    onClose();
+  };
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      <Inp label="Task Title *" value={t.title} onChange={e=>set("title",e.target.value)} placeholder="e.g. Send proposal to Al Madina"/>
+      <Grid cols={2}>
+        <Sel label="Linked Deal" value={t.dealId} onChange={e=>set("dealId",e.target.value)}><option value="">— No Deal —</option>{deals.map(d=><option key={d.id} value={d.id}>{d.company}</option>)}</Sel>
+        <Sel label="Priority" value={t.priority} onChange={e=>set("priority",e.target.value)}><option>High</option><option>Medium</option><option>Low</option></Sel>
+      </Grid>
+      <Inp label="Due Date" type="date" value={t.dueDate} onChange={e=>set("dueDate",e.target.value)}/>
+      <Txt label="Notes" value={t.notes} onChange={e=>set("notes",e.target.value)} placeholder="Optional details..."/>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end",marginTop:4}}>
+        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+        <Btn onClick={save} disabled={!t.title.trim()}>Add Task</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ─── AM: HOME ─────────────────────────────────────────────────────────────────
+function AMHome({user,deals,activities,tasks,onNav}){
+  const myDeals=deals.filter(d=>d.userId===user.id);
+  const myTasks=tasks.filter(t=>t.userId===user.id&&!t.done);
+  const myActs=activities.filter(a=>a.userId===user.id);
+  const overdue=myTasks.filter(t=>isOverdue(t.dueDate));
+  const dueToday=myTasks.filter(t=>isDueToday(t.dueDate));
+  const totalVal=myDeals.filter(d=>d.stage==="Closed Won").reduce((s,d)=>s+(d.value||0),0);
+  const pipeVal=myDeals.filter(d=>d.stage!=="Closed Lost").reduce((s,d)=>s+(d.value||0),0);
+  const target=user.target||500;
+  const pct=Math.min(100,Math.round((totalVal/target)*100));
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      {/* Welcome */}
+      <div style={{background:`linear-gradient(135deg,#1a0508,#0f0f11)`,border:`1px solid ${G.border}`,borderRadius:14,padding:20}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:18,color:"#fff"}}>Good {new Date().getHours()<12?"morning":"afternoon"}, {user.name} 👋</div>
+        <div style={{fontSize:11,color:G.sub,marginTop:4}}>{new Date().toLocaleDateString("en-GB",{weekday:"long",day:"numeric",month:"long"})}</div>
+        <Divider/>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:11,color:G.sub2}}>Monthly Target Progress</div>
+          <div style={{fontSize:11,color:pct>=100?G.green:G.amber}}>OMR {totalVal.toFixed(3)} / {target}.000</div>
+        </div>
+        <div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`,background:pct>=100?G.green:G.red}}/></div>
+        <div style={{fontSize:10,color:G.sub,marginTop:6}}>{pct}% of target achieved</div>
+      </div>
+
+      {/* Stats */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+        <Stat label="Active Deals" value={myDeals.filter(d=>d.stage==="Active").length} color="#fbbf24"/>
+        <Stat label="Pipeline OMR" value={pipeVal.toFixed(0)} color="#818cf8"/>
+        <Stat label="Won OMR" value={totalVal.toFixed(0)} color="#4ade80"/>
+        <Stat label="Activities" value={myActs.length} color={G.sub2}/>
+      </div>
+
+      {/* Alerts */}
+      {(overdue.length>0||dueToday.length>0)&&(
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {overdue.length>0&&(
+            <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>onNav("tasks")}>
+              <div style={{fontSize:12,color:"#f87171"}}>⚠️ {overdue.length} overdue task{overdue.length>1?"s":""}</div>
+              <div style={{fontSize:10,color:"#f87171"}}>View →</div>
+            </div>
+          )}
+          {dueToday.length>0&&(
+            <div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.25)",borderRadius:10,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>onNav("tasks")}>
+              <div style={{fontSize:12,color:"#fbbf24"}}>📅 {dueToday.length} task{dueToday.length>1?"s":""} due today</div>
+              <div style={{fontSize:10,color:"#fbbf24"}}>View →</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Recent Activity */}
+      <Card>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Recent Activity</div>
+        {myActs.length===0
+          ?<div style={{fontSize:12,color:G.sub,textAlign:"center",padding:"20px 0"}}>No activity yet — log your first visit</div>
+          :myActs.slice(0,5).map(a=>{
+            const m=ACTIVITY_META[a.type]||ACTIVITY_META["Call"];
+            const deal=deals.find(d=>d.id===a.dealId);
+            return(
+              <div key={a.id} style={{display:"flex",gap:12,alignItems:"flex-start",padding:"10px 0",borderBottom:`1px solid ${G.border}`}}>
+                <div style={{fontSize:18,lineHeight:1,marginTop:2}}>{m.icon}</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,color:G.text}}>{a.type}{deal?` — ${deal.company}`:""}</div>
+                  {a.outcome&&<div style={{fontSize:11,color:G.sub2,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.outcome}</div>}
+                  <div style={{fontSize:10,color:G.sub,marginTop:2}}>{fmtD(a.ts)} {fmtT(a.ts)}</div>
+                </div>
+              </div>
+            );
+          })
+        }
+      </Card>
+    </div>
+  );
+}
+
+// ─── AM: PIPELINE ─────────────────────────────────────────────────────────────
+function AMPipeline({user,deals,onSave,onDelete}){
+  const [modal,setModal]=useState(null); // null | "add" | deal obj
+  const myDeals=deals.filter(d=>d.userId===user.id);
+  const byStage=(s)=>myDeals.filter(d=>d.stage===s);
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff"}}>My Pipeline</div>
+        <Btn sm onClick={()=>setModal("add")}>+ New Deal</Btn>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+        {PIPELINE.map(stage=>{
+          const m=STAGE_META[stage];
+          const stagDeals=byStage(stage);
+          const val=stagDeals.reduce((s,d)=>s+(d.value||0),0);
+          return(
+            <div key={stage}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <span className="tag" style={{color:m.color,background:m.bg,borderColor:m.border}}>{stage}</span>
+                <span style={{fontSize:10,color:G.sub}}>{stagDeals.length}</span>
+              </div>
+              {val>0&&<div style={{fontSize:10,color:G.sub2,marginBottom:8}}>OMR {val.toFixed(3)}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {stagDeals.length===0
+                  ?<div style={{background:G.card,border:`1px dashed ${G.border}`,borderRadius:10,padding:"20px 12px",textAlign:"center",fontSize:10,color:G.sub}}>No deals</div>
+                  :stagDeals.map(d=>(
+                    <div key={d.id} className="fu" style={{background:G.card,border:`1px solid ${G.border}`,borderRadius:10,padding:12,cursor:"pointer"}} onClick={()=>setModal(d)}>
+                      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:"#fff",marginBottom:4}}>{d.company}</div>
+                      {d.contact&&<div style={{fontSize:10,color:G.sub2,marginBottom:4}}>{d.contact}</div>}
+                      {d.value>0&&<div style={{fontSize:11,color:"#4ade80",marginBottom:4}}>OMR {d.value.toFixed(3)}</div>}
+                      {d.products?.length>0&&<div style={{fontSize:10,color:G.sub,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{d.products.join(", ")}</div>}
+                      {d.followUpDate&&<div style={{fontSize:10,color:isOverdue(d.followUpDate)?"#f87171":isDueToday(d.followUpDate)?"#fbbf24":G.sub,marginTop:6}}>📅 {d.followUpDate}</div>}
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {modal&&(
+        <Modal title={modal==="add"?"New Deal":"Edit Deal"} onClose={()=>setModal(null)}>
+          <DealForm initial={modal==="add"?{}:modal} userId={user.id} userName={user.name}
+            onSave={(deal)=>{onSave(deal);setModal(null);}}
+            onClose={()=>setModal(null)}
+          />
+          {modal!=="add"&&(
+            <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${G.border}`,display:"flex",justifyContent:"flex-end"}}>
+              <Btn variant="danger" sm onClick={()=>{onDelete(modal.id);setModal(null);}}>Delete Deal</Btn>
+            </div>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── AM: ACTIVITIES ───────────────────────────────────────────────────────────
+function AMActivities({user,deals,activities,onSave}){
+  const [modal,setModal]=useState(false);
+  const [filter,setFilter]=useState("All");
+  const myActs=activities.filter(a=>a.userId===user.id);
+  const filtered=filter==="All"?myActs:myActs.filter(a=>a.type===filter);
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff"}}>Activity Log</div>
+        <Btn sm onClick={()=>setModal(true)}>+ Log Activity</Btn>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
+        {["All",...ACTIVITY_TYPES].map(t=>(
+          <button key={t} className="pill" onClick={()=>setFilter(t)}
+            style={{background:filter===t?G.red:"transparent",borderColor:filter===t?G.red:G.border2,color:filter===t?"#fff":G.sub2,fontSize:11,padding:"5px 12px",borderRadius:20,border:"1px solid",cursor:"pointer"}}>
+            {t}
+          </button>
+        ))}
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.length===0
+          ?<div style={{textAlign:"center",padding:"48px 0",color:G.sub,fontSize:12}}>No activities yet.</div>
+          :filtered.map(a=>{
+            const m=ACTIVITY_META[a.type]||ACTIVITY_META["Call"];
+            const deal=deals.find(d=>d.id===a.dealId);
+            return(
+              <Card key={a.id}>
+                <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+                  <div style={{fontSize:22,lineHeight:1}}>{m.icon}</div>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
+                      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:13,color:"#fff"}}>{a.type}</div>
+                      <div style={{fontSize:10,color:G.sub}}>{fmtD(a.ts)} {fmtT(a.ts)}</div>
+                    </div>
+                    {deal&&<div style={{fontSize:11,color:G.sub2,marginTop:2}}>🏢 {deal.company}</div>}
+                    {a.outcome&&<div style={{fontSize:11,color:G.text,marginTop:6,background:G.card2,borderRadius:6,padding:"6px 10px"}}>{a.outcome}</div>}
+                    {a.notes&&<div style={{fontSize:11,color:G.sub2,marginTop:6}}>{a.notes}</div>}
+                    {a.nextStep&&<div style={{fontSize:11,color:"#fbbf24",marginTop:6}}>→ {a.nextStep}</div>}
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        }
+      </div>
+      {modal&&(
+        <Modal title="Log Activity" onClose={()=>setModal(false)}>
+          <ActivityForm deals={deals.filter(d=>d.userId===user.id)} userId={user.id} userName={user.name}
+            onSave={(a)=>{onSave(a);setModal(false);}} onClose={()=>setModal(false)}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── AM: TASKS ────────────────────────────────────────────────────────────────
+function AMTasks({user,deals,tasks,onSave,onToggle,onDelete}){
+  const [modal,setModal]=useState(false);
+  const [showDone,setShowDone]=useState(false);
+  const myTasks=tasks.filter(t=>t.userId===user.id);
+  const open=myTasks.filter(t=>!t.done);
+  const done=myTasks.filter(t=>t.done);
+  const prioColor={High:"#f87171",Medium:"#fbbf24",Low:"#4ade80"};
+
+  const TaskRow=({t})=>{
+    const deal=deals.find(d=>d.id===t.dealId);
+    const od=isOverdue(t.dueDate)&&!t.done;
+    const dt=isDueToday(t.dueDate)&&!t.done;
+    return(
+      <div style={{background:G.card,border:`1px solid ${od?"rgba(239,68,68,0.3)":dt?"rgba(245,158,11,0.25)":G.border}`,borderRadius:10,padding:"12px 14px",display:"flex",gap:12,alignItems:"flex-start"}}>
+        <input type="checkbox" checked={t.done} onChange={()=>onToggle(t.id)} style={{marginTop:3,cursor:"pointer",accentColor:G.red}}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <div style={{fontSize:13,color:t.done?"#555":"#fff",textDecoration:t.done?"line-through":"none",fontFamily:"Syne,sans-serif",fontWeight:600}}>{t.title}</div>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <span style={{fontSize:10,color:prioColor[t.priority]||G.sub}}>{t.priority}</span>
+              {t.dueDate&&<span style={{fontSize:10,color:od?"#f87171":dt?"#fbbf24":G.sub}}>{od?"⚠️ ":dt?"📅 ":""}{t.dueDate}</span>}
+            </div>
+          </div>
+          {deal&&<div style={{fontSize:11,color:G.sub2,marginTop:2}}>🏢 {deal.company}</div>}
+          {t.notes&&<div style={{fontSize:11,color:G.sub,marginTop:4}}>{t.notes}</div>}
+        </div>
+        <button onClick={()=>onDelete(t.id)} style={{background:"transparent",border:"none",color:G.muted,cursor:"pointer",fontSize:14,lineHeight:1,padding:"2px 4px"}}>×</button>
+      </div>
+    );
+  };
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff"}}>Tasks & Follow-ups</div>
+        <Btn sm onClick={()=>setModal(true)}>+ Add Task</Btn>
+      </div>
+      {open.length===0&&<div style={{textAlign:"center",padding:"40px 0",color:G.sub,fontSize:12}}>All clear! No open tasks.</div>}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {open.sort((a,b)=>{const po={High:0,Medium:1,Low:2};return po[a.priority]-po[b.priority];}).map(t=><TaskRow key={t.id} t={t}/>)}
+      </div>
+      {done.length>0&&(
+        <div style={{marginTop:20}}>
+          <button onClick={()=>setShowDone(x=>!x)} style={{background:"transparent",border:"none",color:G.sub,fontSize:11,cursor:"pointer",marginBottom:10}}>
+            {showDone?"▲":"▼"} {done.length} completed task{done.length>1?"s":""}
+          </button>
+          {showDone&&<div style={{display:"flex",flexDirection:"column",gap:8,opacity:0.5}}>{done.map(t=><TaskRow key={t.id} t={t}/>)}</div>}
+        </div>
+      )}
+      {modal&&(
+        <Modal title="Add Task" onClose={()=>setModal(false)}>
+          <TaskForm deals={deals.filter(d=>d.userId===user.id)} userId={user.id} userName={user.name}
+            onSave={(t)=>{onSave(t);setModal(false);}} onClose={()=>setModal(false)}/>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── AM: REPORTS ──────────────────────────────────────────────────────────────
+function AMReports({user,deals,activities,tasks}){
+  const myDeals=deals.filter(d=>d.userId===user.id);
+  const myActs=activities.filter(a=>a.userId===user.id);
+  const won=myDeals.filter(d=>d.stage==="Closed Won");
+  const lost=myDeals.filter(d=>d.stage==="Closed Lost");
+  const active=myDeals.filter(d=>d.stage==="Active");
+  const leads=myDeals.filter(d=>d.stage==="Lead");
+  const wonVal=won.reduce((s,d)=>s+(d.value||0),0);
+  const pipeVal=myDeals.filter(d=>d.stage!=="Closed Lost").reduce((s,d)=>s+(d.value||0),0);
+  const convRate=myDeals.length>0?Math.round((won.length/myDeals.length)*100):0;
+  const target=user.target||500;
+
+  const actByType=ACTIVITY_TYPES.map(t=>({type:t,count:myActs.filter(a=>a.type===t).length,icon:ACTIVITY_META[t]?.icon}));
+  const productFreq={};
+  myDeals.forEach(d=>d.products?.forEach(p=>{productFreq[p]=(productFreq[p]||0)+1;}));
+  const topProducts=Object.entries(productFreq).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff"}}>My Reports</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+        <Stat label="Won OMR" value={wonVal.toFixed(0)} color="#4ade80" sub={`${Math.min(100,Math.round((wonVal/target)*100))}% of target`}/>
+        <Stat label="Pipeline OMR" value={pipeVal.toFixed(0)} color="#818cf8"/>
+        <Stat label="Conversion" value={`${convRate}%`} color="#fbbf24"/>
+        <Stat label="Total Deals" value={myDeals.length} color={G.sub2}/>
+      </div>
+
+      <Grid cols={2} gap={16}>
+        <Card>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Pipeline Breakdown</div>
+          {[["Lead",leads.length,"#818cf8"],["Active",active.length,"#fbbf24"],["Closed Won",won.length,"#4ade80"],["Closed Lost",lost.length,"#f87171"]].map(([s,n,c])=>(
+            <div key={s} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${G.border}`}}>
+              <span style={{fontSize:12,color:c}}>{s}</span>
+              <span style={{fontSize:12,color:"#fff",fontFamily:"Syne,sans-serif",fontWeight:700}}>{n}</span>
+            </div>
+          ))}
+        </Card>
+        <Card>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Activity Breakdown</div>
+          {actByType.map(({type,count,icon})=>(
+            <div key={type} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${G.border}`}}>
+              <span style={{fontSize:12,color:G.text}}>{icon} {type}</span>
+              <span style={{fontSize:12,color:"#fff",fontFamily:"Syne,sans-serif",fontWeight:700}}>{count}</span>
+            </div>
+          ))}
+        </Card>
+      </Grid>
+
+      {topProducts.length>0&&(
+        <Card>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Most Pitched Products</div>
+          {topProducts.map(([p,n])=>(
+            <div key={p} style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                <span style={{fontSize:11,color:G.text}}>{p}</span>
+                <span style={{fontSize:11,color:G.sub2}}>{n} deal{n>1?"s":""}</span>
+              </div>
+              <div className="progress-bar"><div className="progress-fill" style={{width:`${(n/myDeals.length)*100}%`,background:G.red}}/></div>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ─── AM PORTAL ────────────────────────────────────────────────────────────────
+function AMPortal({user,deals,activities,tasks,onAddDeal,onUpdateDeal,onDeleteDeal,onAddActivity,onAddTask,onToggleTask,onDeleteTask,onLogout}){
+  useCSS();
+  const [tab,setTab]=useState("home");
+  const navs=[["home","🏠 Home"],["pipeline","📊 Pipeline"],["activities","📋 Activities"],["tasks","✅ Tasks"],["reports","📈 Reports"]];
+
+  const panels={
+    home:<AMHome user={user} deals={deals} activities={activities} tasks={tasks} onNav={setTab}/>,
+    pipeline:<AMPipeline user={user} deals={deals} onSave={(d)=>{deals.find(x=>x.id===d.id)?onUpdateDeal(d):onAddDeal(d);}} onDelete={onDeleteDeal}/>,
+    activities:<AMActivities user={user} deals={deals} activities={activities} onSave={onAddActivity}/>,
+    tasks:<AMTasks user={user} deals={deals} tasks={tasks} onSave={onAddTask} onToggle={onToggleTask} onDelete={onDeleteTask}/>,
+    reports:<AMReports user={user} deals={deals} activities={activities} tasks={tasks}/>,
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:G.dark}}>
+      {/* Header */}
+      <div style={{background:G.surface,borderBottom:`1px solid ${G.border}`,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10,height:52}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:28,height:28,borderRadius:"50%",background:G.red,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:10,color:"#fff",flexShrink:0}}>OO</div>
+          <div style={{display:"flex",gap:2}}>
+            {navs.map(([k,l])=>(
+              <button key={k} className={`nav-btn${tab===k?" active":""}`} onClick={()=>setTab(k)} style={{color:tab===k?"#fff":G.sub}}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontSize:11,color:G.sub}}>{user.name}</div>
+          <Btn variant="ghost" sm onClick={onLogout}>Sign Out</Btn>
+        </div>
+      </div>
+      <div style={{maxWidth:1100,margin:"0 auto",padding:"24px 20px 60px"}} className="fu">
+        {panels[tab]}
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADER: OVERVIEW ─────────────────────────────────────────────────────────
+function LeaderOverview({deals,activities,tasks,users}){
+  const ams=users.filter(u=>u.role==="am");
+  const totalWon=deals.filter(d=>d.stage==="Closed Won").reduce((s,d)=>s+(d.value||0),0);
+  const totalPipe=deals.filter(d=>d.stage!=="Closed Lost").reduce((s,d)=>s+(d.value||0),0);
+  const overdueTasks=tasks.filter(t=>!t.done&&isOverdue(t.dueDate));
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+        <Stat label="Total Deals" value={deals.length} color={G.sub2}/>
+        <Stat label="Pipeline OMR" value={totalPipe.toFixed(0)} color="#818cf8"/>
+        <Stat label="Won OMR" value={totalWon.toFixed(0)} color="#4ade80"/>
+        <Stat label="Activities" value={activities.length} color="#fbbf24"/>
+        <Stat label="Overdue Tasks" value={overdueTasks.length} color={overdueTasks.length>0?"#f87171":G.sub2}/>
+      </div>
+
+      {/* AM Cards */}
+      <div>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:13,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:12}}>Team Overview</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          {ams.map(am=>{
+            const amDeals=deals.filter(d=>d.userId===am.id);
+            const amWon=amDeals.filter(d=>d.stage==="Closed Won");
+            const amVal=amWon.reduce((s,d)=>s+(d.value||0),0);
+            const pct=Math.min(100,Math.round((amVal/(am.target||500))*100));
+            const amActs=activities.filter(a=>a.userId===am.id);
+            const amOverdue=tasks.filter(t=>t.userId===am.id&&!t.done&&isOverdue(t.dueDate));
+            return(
+              <Card key={am.id} style={{padding:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:13,color:"#fff"}}>{am.name}</div>
+                  {amOverdue.length>0&&<span style={{fontSize:10,color:"#f87171"}}>⚠️ {amOverdue.length}</span>}
+                </div>
+                <div style={{display:"flex",gap:16,marginBottom:10}}>
+                  <div><div style={{fontSize:16,color:"#4ade80",fontFamily:"Syne,sans-serif",fontWeight:800}}>OMR {amVal.toFixed(0)}</div><div style={{fontSize:9,color:G.sub}}>WON</div></div>
+                  <div><div style={{fontSize:16,color:"#fbbf24",fontFamily:"Syne,sans-serif",fontWeight:800}}>{amDeals.length}</div><div style={{fontSize:9,color:G.sub}}>DEALS</div></div>
+                  <div><div style={{fontSize:16,color:"#818cf8",fontFamily:"Syne,sans-serif",fontWeight:800}}>{amActs.length}</div><div style={{fontSize:9,color:G.sub}}>ACTS</div></div>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:10,color:G.sub}}>Target progress</span>
+                  <span style={{fontSize:10,color:pct>=100?G.green:G.amber}}>{pct}%</span>
+                </div>
+                <div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`,background:pct>=100?G.green:G.red}}/></div>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADER: PIPELINE ─────────────────────────────────────────────────────────
+function LeaderPipeline({deals}){
+  const [filterAM,setFilterAM]=useState("all");
+  const amIds=[...new Set(deals.map(d=>d.userId))];
+  const filtered=filterAM==="all"?deals:deals.filter(d=>d.userId===filterAM);
+
+  return(
+    <div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:10}}>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff"}}>Team Pipeline</div>
+        <Sel value={filterAM} onChange={e=>setFilterAM(e.target.value)} style={{width:"auto"}}>
+          <option value="all">All AMs</option>
+          {amIds.map(id=><option key={id} value={id}>{userName(id)}</option>)}
+        </Sel>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+        {PIPELINE.map(stage=>{
+          const m=STAGE_META[stage];
+          const sd=filtered.filter(d=>d.stage===stage);
+          const val=sd.reduce((s,d)=>s+(d.value||0),0);
+          return(
+            <div key={stage}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <span className="tag" style={{color:m.color,background:m.bg,borderColor:m.border}}>{stage}</span>
+                <span style={{fontSize:10,color:G.sub}}>{sd.length}</span>
+              </div>
+              {val>0&&<div style={{fontSize:10,color:G.sub2,marginBottom:8}}>OMR {val.toFixed(3)}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {sd.length===0
+                  ?<div style={{background:G.card,border:`1px dashed ${G.border}`,borderRadius:10,padding:"20px 12px",textAlign:"center",fontSize:10,color:G.sub}}>No deals</div>
+                  :sd.map(d=>(
+                    <div key={d.id} style={{background:G.card,border:`1px solid ${G.border}`,borderRadius:10,padding:12}}>
+                      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:"#fff",marginBottom:4}}>{d.company}</div>
+                      <div style={{fontSize:10,color:"#818cf8",marginBottom:4}}>👤 {d.userName}</div>
+                      {d.value>0&&<div style={{fontSize:11,color:"#4ade80"}}>OMR {d.value.toFixed(3)}</div>}
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADER: LEADERBOARD ──────────────────────────────────────────────────────
+function LeaderLeaderboard({deals,activities,users}){
+  const ams=users.filter(u=>u.role==="am");
+  const rows=ams.map(am=>{
+    const amDeals=deals.filter(d=>d.userId===am.id);
+    const won=amDeals.filter(d=>d.stage==="Closed Won");
+    const wonVal=won.reduce((s,d)=>s+(d.value||0),0);
+    const pipeVal=amDeals.filter(d=>d.stage!=="Closed Lost").reduce((s,d)=>s+(d.value||0),0);
+    const amActs=activities.filter(a=>a.userId===am.id);
+    const convRate=amDeals.length>0?Math.round((won.length/amDeals.length)*100):0;
+    const target=am.target||500;
+    const pct=Math.min(100,Math.round((wonVal/target)*100));
+    return{...am,wonVal,pipeVal,deals:amDeals.length,acts:amActs.length,convRate,pct,won:won.length};
+  }).sort((a,b)=>b.wonVal-a.wonVal);
+
+  return(
+    <div>
+      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff",marginBottom:20}}>Leaderboard</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {rows.map((am,i)=>(
+          <Card key={am.id} style={{padding:"14px 18px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap"}}>
+              <div style={{fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:20,color:i===0?"#fbbf24":i===1?"#aaa":i===2?"#cd7f32":G.muted,width:28,textAlign:"center"}}>#{i+1}</div>
+              <div style={{flex:1,minWidth:120}}>
+                <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:14,color:"#fff"}}>{am.name}</div>
+                <div style={{marginTop:6}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                    <span style={{fontSize:10,color:G.sub}}>Target: OMR {am.target}</span>
+                    <span style={{fontSize:10,color:am.pct>=100?G.green:G.amber}}>{am.pct}%</span>
+                  </div>
+                  <div className="progress-bar"><div className="progress-fill" style={{width:`${am.pct}%`,background:am.pct>=100?G.green:G.red}}/></div>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:16,textAlign:"center"}}>
+                {[["Won OMR",`${am.wonVal.toFixed(0)}`,"#4ade80"],["Pipeline",`${am.pipeVal.toFixed(0)}`,"#818cf8"],["Deals",am.deals,G.sub2],["Won",am.won,"#fbbf24"],["Acts",am.acts,G.sub2]].map(([l,v,c])=>(
+                  <div key={l}><div style={{fontSize:14,color:c,fontFamily:"Syne,sans-serif",fontWeight:800}}>{v}</div><div style={{fontSize:9,color:G.sub,textTransform:"uppercase"}}>{l}</div></div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADER: ACTIVITIES ───────────────────────────────────────────────────────
+function LeaderActivities({activities,deals}){
+  const [filterAM,setFilterAM]=useState("all");
+  const [filterType,setFilterType]=useState("All");
+  const amIds=[...new Set(activities.map(a=>a.userId))];
+  const filtered=activities.filter(a=>{
+    if(filterAM!=="all"&&a.userId!==filterAM)return false;
+    if(filterType!=="All"&&a.type!==filterType)return false;
+    return true;
+  });
+  return(
+    <div>
+      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff",marginBottom:16}}>Team Activities</div>
+      <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+        <Sel value={filterAM} onChange={e=>setFilterAM(e.target.value)} style={{width:"auto"}}>
+          <option value="all">All AMs</option>
+          {amIds.map(id=><option key={id} value={id}>{userName(id)}</option>)}
+        </Sel>
+        <Sel value={filterType} onChange={e=>setFilterType(e.target.value)} style={{width:"auto"}}>
+          <option>All</option>
+          {ACTIVITY_TYPES.map(t=><option key={t}>{t}</option>)}
+        </Sel>
+      </div>
+      <div style={{fontSize:11,color:G.sub,marginBottom:12}}>{filtered.length} activities</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {filtered.length===0
+          ?<div style={{textAlign:"center",padding:"40px 0",color:G.sub,fontSize:12}}>No activities found.</div>
+          :filtered.map(a=>{
+            const m=ACTIVITY_META[a.type]||ACTIVITY_META["Call"];
+            const deal=deals.find(d=>d.id===a.dealId);
+            return(
+              <Card key={a.id} style={{padding:"12px 16px"}}>
+                <div style={{display:"flex",gap:12,alignItems:"flex-start"}}>
+                  <div style={{fontSize:20}}>{m.icon}</div>
+                  <div style={{flex:1}}>
+                    <div style={{display:"flex",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+                      <div>
+                        <span style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:"#fff"}}>{a.type}</span>
+                        {deal&&<span style={{fontSize:11,color:G.sub2,marginLeft:8}}>🏢 {deal.company}</span>}
+                      </div>
+                      <div style={{display:"flex",gap:12,fontSize:10,color:G.sub}}>
+                        <span style={{color:"#818cf8"}}>👤 {a.userName}</span>
+                        <span>{fmtD(a.ts)} {fmtT(a.ts)}</span>
+                      </div>
+                    </div>
+                    {a.outcome&&<div style={{fontSize:11,color:G.sub2,marginTop:4}}>{a.outcome}</div>}
+                    {a.nextStep&&<div style={{fontSize:11,color:"#fbbf24",marginTop:4}}>→ {a.nextStep}</div>}
+                  </div>
+                </div>
+              </Card>
+            );
+          })
+        }
+      </div>
+    </div>
+  );
+}
+
+// ─── LEADER: REPORTS ──────────────────────────────────────────────────────────
+function LeaderReports({deals,activities,tasks,users}){
+  const ams=users.filter(u=>u.role==="am");
+  const totalTarget=ams.reduce((s,a)=>s+(a.target||500),0);
+  const totalWon=deals.filter(d=>d.stage==="Closed Won").reduce((s,d)=>s+(d.value||0),0);
+  const totalPipe=deals.filter(d=>d.stage!=="Closed Lost").reduce((s,d)=>s+(d.value||0),0);
+  const convRate=deals.length>0?Math.round((deals.filter(d=>d.stage==="Closed Won").length/deals.length)*100):0;
+  const actByType=ACTIVITY_TYPES.map(t=>({t,n:activities.filter(a=>a.type===t).length}));
+
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:20}}>
+      <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:16,color:"#fff"}}>Team Reports</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+        <Stat label="Total Won OMR" value={totalWon.toFixed(0)} color="#4ade80" sub={`${Math.round((totalWon/totalTarget)*100)}% of team target`}/>
+        <Stat label="Total Pipeline" value={totalPipe.toFixed(0)} color="#818cf8"/>
+        <Stat label="Conversion Rate" value={`${convRate}%`} color="#fbbf24"/>
+        <Stat label="Total Activities" value={activities.length} color={G.sub2}/>
+      </div>
+      <Grid cols={2} gap={16}>
+        <Card>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Team Target vs Won</div>
+          {ams.map(am=>{
+            const amWon=deals.filter(d=>d.userId===am.id&&d.stage==="Closed Won").reduce((s,d)=>s+(d.value||0),0);
+            const pct=Math.min(100,Math.round((amWon/(am.target||500))*100));
+            return(
+              <div key={am.id} style={{marginBottom:12}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:11,color:G.text}}>{am.name}</span>
+                  <span style={{fontSize:11,color:pct>=100?G.green:G.amber}}>OMR {amWon.toFixed(0)} / {am.target}</span>
+                </div>
+                <div className="progress-bar"><div className="progress-fill" style={{width:`${pct}%`,background:pct>=100?G.green:G.red}}/></div>
+              </div>
+            );
+          })}
+        </Card>
+        <Card>
+          <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Activity Breakdown</div>
+          {actByType.map(({t,n})=>(
+            <div key={t} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:`1px solid ${G.border}`}}>
+              <span style={{fontSize:12,color:G.text}}>{ACTIVITY_META[t]?.icon} {t}</span>
+              <span style={{fontSize:12,color:"#fff",fontFamily:"Syne,sans-serif",fontWeight:700}}>{n}</span>
+            </div>
+          ))}
+        </Card>
+      </Grid>
+      <Card>
+        <div style={{fontFamily:"Syne,sans-serif",fontWeight:700,fontSize:12,color:G.sub2,textTransform:"uppercase",letterSpacing:1,marginBottom:14}}>Deal Stage Summary</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+          {PIPELINE.map(stage=>{
+            const m=STAGE_META[stage];
+            const n=deals.filter(d=>d.stage===stage).length;
+            const val=deals.filter(d=>d.stage===stage).reduce((s,d)=>s+(d.value||0),0);
+            return(
+              <div key={stage} style={{textAlign:"center",padding:"12px 8px",background:G.card2,borderRadius:8}}>
+                <div style={{fontSize:18,fontFamily:"Syne,sans-serif",fontWeight:800,color:m.color}}>{n}</div>
+                <div style={{fontSize:10,color:G.sub,marginBottom:4}}>{stage}</div>
+                {val>0&&<div style={{fontSize:10,color:G.sub2}}>OMR {val.toFixed(0)}</div>}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// ─── LEADER PORTAL ────────────────────────────────────────────────────────────
+function LeaderPortal({user,deals,activities,tasks,onLogout}){
+  useCSS();
+  const [tab,setTab]=useState("overview");
+  const navs=[["overview","🏠 Overview"],["pipeline","📊 Pipeline"],["leaderboard","🏆 Leaderboard"],["activities","📋 Activities"],["reports","📈 Reports"]];
+  const panels={
+    overview:<LeaderOverview deals={deals} activities={activities} tasks={tasks} users={USERS}/>,
+    pipeline:<LeaderPipeline deals={deals}/>,
+    leaderboard:<LeaderLeaderboard deals={deals} activities={activities} users={USERS}/>,
+    activities:<LeaderActivities activities={activities} deals={deals}/>,
+    reports:<LeaderReports deals={deals} activities={activities} tasks={tasks} users={USERS}/>,
+  };
+  return(
+    <div style={{minHeight:"100vh",background:G.dark}}>
+      <div style={{background:G.surface,borderBottom:`1px solid ${G.border}`,padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:10,height:52}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:28,height:28,borderRadius:"50%",background:G.red,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Syne,sans-serif",fontWeight:800,fontSize:10,color:"#fff",flexShrink:0}}>OO</div>
+          <div style={{display:"flex",gap:2}}>
+            {navs.map(([k,l])=>(
+              <button key={k} className={`nav-btn${tab===k?" active":""}`} onClick={()=>setTab(k)} style={{color:tab===k?"#fff":G.sub}}>
+                {l}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontSize:11,color:G.sub}}>{user.name}</div>
+          <Btn variant="ghost" sm onClick={onLogout}>Sign Out</Btn>
+        </div>
+      </div>
+      <div style={{maxWidth:1200,margin:"0 auto",padding:"24px 20px 60px"}} className="fu">
+        {panels[tab]}
+      </div>
+    </div>
+  );
+}
+
+// ─── ROOT ─────────────────────────────────────────────────────────────────────
+function App(){
+  const [user,setUser]=useState(null);
+  const [deals,setDeals]=useState([]);
+  const [activities,setActivities]=useState([]);
+  const [tasks,setTasks]=useState([]);
+  const [loading,setLoading]=useState(true);
+
+  useEffect(()=>{
+    Promise.all([sGet(KEYS.DEALS),sGet(KEYS.ACTIVITIES),sGet(KEYS.TASKS)])
+      .then(([d,a,t])=>{setDeals(d);setActivities(a);setTasks(t);setLoading(false);});
+  },[]);
+
+  const saveDeal=async(d)=>{const n=[d,...deals.filter(x=>x.id!==d.id)];setDeals(n);await sSet(KEYS.DEALS,n);};
+  const delDeal=async(id)=>{const n=deals.filter(d=>d.id!==id);setDeals(n);await sSet(KEYS.DEALS,n);};
+  const saveAct=async(a)=>{const n=[a,...activities];setActivities(n);await sSet(KEYS.ACTIVITIES,n);};
+  const saveTask=async(t)=>{const n=[t,...tasks];setTasks(n);await sSet(KEYS.TASKS,n);};
+  const toggleTask=async(id)=>{const n=tasks.map(t=>t.id===id?{...t,done:!t.done,doneAt:!t.done?now():null}:t);setTasks(n);await sSet(KEYS.TASKS,n);};
+  const delTask=async(id)=>{const n=tasks.filter(t=>t.id!==id);setTasks(n);await sSet(KEYS.TASKS,n);};
+
+  if(loading) return(
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#080809"}}>
+      <div style={{color:"#444",fontSize:12,animation:"pulse 1.5s infinite",fontFamily:"JetBrains Mono,monospace"}}>Loading portal...</div>
+    </div>
+  );
+
+  if(!user) return <Login onLogin={setUser}/>;
+
+  if(user.role==="leader") return(
+    <LeaderPortal user={user} deals={deals} activities={activities} tasks={tasks} onLogout={()=>setUser(null)}/>
+  );
+
+  return(
+    <AMPortal user={user} deals={deals} activities={activities} tasks={tasks}
+      onAddDeal={saveDeal} onUpdateDeal={saveDeal} onDeleteDeal={delDeal}
+      onAddActivity={saveAct} onAddTask={saveTask}
+      onToggleTask={toggleTask} onDeleteTask={delTask}
+      onLogout={()=>setUser(null)}
+    />
+  );
+}
+
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
